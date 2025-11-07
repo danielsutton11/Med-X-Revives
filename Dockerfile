@@ -21,8 +21,9 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Copy ANY jar file from build stage
-COPY --from=build /app/target/*.jar app.jar
+# Copy the SPECIFIC shaded JAR file (not the original)
+# This is the 14MB file with all dependencies, not the 9KB original
+COPY --from=build /app/target/discord-claim-bot-1.0.0.jar app.jar
 
 # Run the bot
 CMD ["java", "-jar", "app.jar"]
