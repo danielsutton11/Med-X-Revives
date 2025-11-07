@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["maven", "jdk17"]
-
-[phases.build]
-cmds = ["mvn clean package -DskipTests", "ls -la target/"]
-
-[start]
-cmd = "java -jar target/discord-claim-bot-1.0.0.jar"
