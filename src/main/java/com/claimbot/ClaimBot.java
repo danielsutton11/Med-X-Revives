@@ -31,15 +31,17 @@ public class ClaimBot extends ListenerAdapter {
 
     private final String targetServerId;
     private final String targetChannelId;
+    private final String targetRoleId;
     private final String tornApiKey;
     private final OkHttpClient httpClient;
     private final ConcurrentHashMap<String, ClaimData> activeClaims = new ConcurrentHashMap<>();
 
     private JDA jda;
 
-    public ClaimBot(String targetServerId, String targetChannelId, String tornApiKey) {
+    public ClaimBot(String targetServerId, String targetChannelId, String targetRoleId, String tornApiKey) {
         this.targetServerId = targetServerId;
         this.targetChannelId = targetChannelId;
+        this.targetRoleId = targetRoleId;
         this.tornApiKey = tornApiKey;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
@@ -168,6 +170,7 @@ public class ClaimBot extends ListenerAdapter {
 
             // Send to target channel
             targetChannel.sendMessageEmbeds(embedBuilder.build())
+                    .setContent("<@&" + targetRoleId + ">")
                     .setActionRow(claimButton, claimedButton)
                     .queue(claimMessage -> {
                         // Store claim information
@@ -181,8 +184,10 @@ public class ClaimBot extends ListenerAdapter {
                         );
                         activeClaims.put(claimId, claimData);
 
-                        // Confirm to user
-                        event.getMessage().reply("✅ Your revive request has been submitted!").queue();
+                        // Confirm to user (only if not in target server)
+                        if (!event.getGuild().getId().equals(targetServerId)) {
+                            event.getMessage().reply("✅ Your revive request has been submitted!").queue();
+                        }
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
                                 event.getGuild().getName());
@@ -213,12 +218,12 @@ public class ClaimBot extends ListenerAdapter {
         ClaimData claimData = activeClaims.get(claimId);
 
         if (claimData == null) {
-            event.reply("❌ This claim is no longer valid.").setEphemeral(true).queue();
+            event.reply("❌ This revive request is no longer valid.").setEphemeral(true).queue();
             return;
         }
 
         if (claimData.isClaimed()) {
-            event.reply("⚠️ This claim has already been processed.").setEphemeral(true).queue();
+            event.reply("⚠️ This revive request has already been processed.").setEphemeral(true).queue();
             return;
         }
 
@@ -245,7 +250,7 @@ public class ClaimBot extends ListenerAdapter {
         // Get the original embed
         Message message = event.getMessage();
         if (message.getEmbeds().isEmpty()) {
-            event.reply("❌ Error processing claim.").setEphemeral(true).queue();
+            event.reply("❌ Error processing revive.").setEphemeral(true).queue();
             return;
         }
 
@@ -350,6 +355,7 @@ public class ClaimBot extends ListenerAdapter {
         String token = System.getenv("DISCORD_TOKEN");
         String targetServerId = System.getenv("TARGET_SERVER_ID");
         String targetChannelId = System.getenv("TARGET_CHANNEL_ID");
+        String targetRoleId = System.getenv("TARGET_ROLE_ID");
         String tornApiKey = System.getenv("TORN_API_KEY");
 
         // Validate configuration
@@ -365,6 +371,10 @@ public class ClaimBot extends ListenerAdapter {
             System.err.println("TARGET_CHANNEL_ID environment variable is not set!");
             System.exit(1);
         }
+        if (targetRoleId == null || targetRoleId.isEmpty()) {
+            System.err.println("TARGET_ROLE_ID environment variable is not set!");
+            System.exit(1);
+        }
         if (tornApiKey == null || tornApiKey.isEmpty()) {
             System.err.println("TORN_API_KEY environment variable is not set!");
             System.exit(1);
@@ -374,7 +384,7 @@ public class ClaimBot extends ListenerAdapter {
         System.out.println("Connecting to Discord...");
 
         try {
-            ClaimBot bot = new ClaimBot(targetServerId, targetChannelId, tornApiKey);
+            ClaimBot bot = new ClaimBot(targetServerId, targetChannelId, targetRoleId, tornApiKey);
 
             // Create custom HTTP client with longer timeouts
             OkHttpClient httpClient = new OkHttpClient.Builder()
