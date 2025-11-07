@@ -13,13 +13,16 @@ COPY src ./src
 # Build the application
 RUN mvn clean package -DskipTests
 
+# List what was created (for debugging)
+RUN ls -la target/
+
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Copy the built JAR from build stage
-COPY --from=build /app/target/discord-claim-bot-*.jar app.jar
+# Copy ANY jar file from build stage
+COPY --from=build /app/target/*.jar app.jar
 
 # Run the bot
 CMD ["java", "-jar", "app.jar"]
