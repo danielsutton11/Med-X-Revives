@@ -5,8 +5,8 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.discord</groupId>
-    <artifactId>claim-bot</artifactId>
+    <groupId>com.claimbot</groupId>
+    <artifactId>discord-claim-bot</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
@@ -17,7 +17,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jda.version>5.0.0-beta.20</jda.version>
+        <jda.version>5.0.2</jda.version>
     </properties>
 
     <dependencies>
@@ -26,12 +26,6 @@
             <groupId>net.dv8tion</groupId>
             <artifactId>JDA</artifactId>
             <version>${jda.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>club.minnced</groupId>
-                    <artifactId>opus-java</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- SLF4J Simple Logger -->
@@ -69,7 +63,7 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.discord.claimbot.ClaimBot</mainClass>
+                                    <mainClass>com.claimbot.ClaimBot</mainClass>
                                 </transformer>
                             </transformers>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
