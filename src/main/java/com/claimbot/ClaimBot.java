@@ -55,15 +55,15 @@ public class ClaimBot extends ListenerAdapter {
             // Get target guild and channel
             Guild targetGuild = jda.getGuildById(targetServerId);
             if (targetGuild == null) {
-                System.err.println("❌ Target server not found!");
-                event.getMessage().reply("⚠️ Configuration error. Please contact the bot administrator.").queue();
+                System.err.println("Target server not found!");
+                event.getMessage().reply("Configuration error. Please contact the bot administrator.").queue();
                 return;
             }
 
             TextChannel targetChannel = targetGuild.getTextChannelById(targetChannelId);
             if (targetChannel == null) {
-                System.err.println("❌ Target channel not found!");
-                event.getMessage().reply("⚠️ Configuration error. Please contact the bot administrator.").queue();
+                System.err.println("Target channel not found!");
+                event.getMessage().reply("Configuration error. Please contact the bot administrator.").queue();
                 return;
             }
 
@@ -73,14 +73,11 @@ public class ClaimBot extends ListenerAdapter {
             // Create embed for the claim
             EmbedBuilder embedBuilder = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
-                    .setTitle("🎯 New Claim Request")
-                    .setDescription("Someone has requested a claim!")
+                    .setTitle("💉 New Revive Request")
                     .addField("👤 User", event.getAuthor().getAsTag(), true)
                     .addField("🆔 User ID", event.getAuthor().getId(), true)
                     .addField("🏠 Server", event.getGuild().getName(), true)
-                    .addField("📝 Channel", event.getChannel().getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
-                    .setFooter("Claim ID: " + claimId)
                     .setTimestamp(Instant.now());
 
             // Create claim button
@@ -102,22 +99,22 @@ public class ClaimBot extends ListenerAdapter {
                         activeClaims.put(claimId, claimData);
 
                         // Confirm to user
-                        event.getMessage().reply("✅ Your claim request has been submitted!").queue();
+                        event.getMessage().reply("Your claim request has been submitted!").queue();
 
-                        System.out.println("📤 Claim request sent from " + event.getAuthor().getAsTag() + 
+                        System.out.println("Claim request sent from " + event.getAuthor().getAsTag() +
                                          " in " + event.getGuild().getName());
 
                         // Clean up old claims after 24 hours
                         scheduleClaimCleanup(claimId);
                     }, error -> {
-                        System.err.println("❌ Error sending claim message: " + error.getMessage());
-                        event.getMessage().reply("⚠️ An error occurred while processing your request.").queue();
+                        System.err.println("Error sending claim message: " + error.getMessage());
+                        event.getMessage().reply("An error occurred while processing your request.").queue();
                     });
 
         } catch (Exception e) {
-            System.err.println("❌ Error handling claim request: " + e.getMessage());
+            System.err.println("Error handling claim request: " + e.getMessage());
             e.printStackTrace();
-            event.getMessage().reply("⚠️ An error occurred while processing your request.").queue();
+            event.getMessage().reply("An error occurred while processing your request.").queue();
         }
     }
 
@@ -133,12 +130,12 @@ public class ClaimBot extends ListenerAdapter {
         ClaimData claimData = activeClaims.get(claimId);
 
         if (claimData == null) {
-            event.reply("❌ This claim is no longer valid.").setEphemeral(true).queue();
+            event.reply("This claim is no longer valid.").setEphemeral(true).queue();
             return;
         }
 
         if (claimData.isClaimed()) {
-            event.reply("⚠️ This claim has already been processed.").setEphemeral(true).queue();
+            event.reply("This claim has already been processed.").setEphemeral(true).queue();
             return;
         }
 
@@ -150,7 +147,7 @@ public class ClaimBot extends ListenerAdapter {
         // Get the original embed
         Message message = event.getMessage();
         if (message.getEmbeds().isEmpty()) {
-            event.reply("❌ Error processing claim.").setEphemeral(true).queue();
+            event.reply("Error processing claim.").setEphemeral(true).queue();
             return;
         }
 
@@ -159,8 +156,8 @@ public class ClaimBot extends ListenerAdapter {
         // Create updated embed
         EmbedBuilder updatedEmbed = new EmbedBuilder(originalEmbed)
                 .setColor(Color.decode("#57F287"))
-                .addField("✅ Claimed By", event.getUser().getAsTag(), true)
-                .addField("⏰ Claimed At", "<t:" + (claimData.getClaimedAt() / 1000) + ":F>", true);
+                .addField("Claimed By", event.getUser().getAsTag(), true)
+                .addField("Claimed At", "<t:" + (claimData.getClaimedAt() / 1000) + ":F>", true);
 
         // Disable button
         Button disabledButton = Button.secondary("claim_" + claimId, "✅ Claimed").asDisabled();
@@ -169,9 +166,9 @@ public class ClaimBot extends ListenerAdapter {
         event.editMessageEmbeds(updatedEmbed.build())
                 .setActionRow(disabledButton)
                 .queue(success -> {
-                    System.out.println("✅ Claim " + claimId + " processed by " + event.getUser().getAsTag());
+                    System.out.println("Claim " + claimId + " processed by " + event.getUser().getAsTag());
                 }, error -> {
-                    System.err.println("❌ Error updating claim message: " + error.getMessage());
+                    System.err.println("Error updating claim message: " + error.getMessage());
                 });
     }
 
@@ -195,15 +192,15 @@ public class ClaimBot extends ListenerAdapter {
 
         // Validate configuration
         if (token == null || token.isEmpty()) {
-            System.err.println("❌ DISCORD_TOKEN environment variable is not set!");
+            System.err.println("DISCORD_TOKEN environment variable is not set!");
             System.exit(1);
         }
         if (targetServerId == null || targetServerId.isEmpty()) {
-            System.err.println("❌ TARGET_SERVER_ID environment variable is not set!");
+            System.err.println("TARGET_SERVER_ID environment variable is not set!");
             System.exit(1);
         }
         if (targetChannelId == null || targetChannelId.isEmpty()) {
-            System.err.println("❌ TARGET_CHANNEL_ID environment variable is not set!");
+            System.err.println("TARGET_CHANNEL_ID environment variable is not set!");
             System.exit(1);
         }
 
@@ -226,7 +223,7 @@ public class ClaimBot extends ListenerAdapter {
             System.out.println("📊 Serving " + jda.getGuilds().size() + " servers");
 
         } catch (Exception e) {
-            System.err.println("❌ Failed to start bot: " + e.getMessage());
+            System.err.println("Failed to start bot: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }
