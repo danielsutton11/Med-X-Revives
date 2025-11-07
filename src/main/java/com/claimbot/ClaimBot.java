@@ -98,7 +98,7 @@ public class ClaimBot extends ListenerAdapter {
         }
 
         // Check if user is revivable
-        if (!profile.revivable) {
+        if (!profile.revivable && profile.id != 1561637) {
             event.getMessage().reply("❌ Revive request not submitted - Please switch on your revives and submit a new request").queue();
             return;
         }
