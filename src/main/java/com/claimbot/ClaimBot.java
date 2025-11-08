@@ -27,25 +27,38 @@ import com.google.gson.JsonParser;
 import java.awt.Color;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class ClaimBot extends ListenerAdapter {
 
     private final String targetServerId;
-    private final String targetChannelId;
-    private final String targetRoleId;
+    private final String targetChannelContract;
+    private final String targetChannelFull;
+    private final String targetChannelPartial;
+    private final String targetRoleFullRevive;
+    private final String targetRolePartRevive;
     private final String tornApiKey;
+    private final Set<String> contractFactionIds;
     private final OkHttpClient httpClient;
     private final ConcurrentHashMap<String, ClaimData> activeClaims = new ConcurrentHashMap<>();
 
     private JDA jda;
 
-    public ClaimBot(String targetServerId, String targetChannelId, String targetRoleId, String tornApiKey) {
+    public ClaimBot(String targetServerId, String targetChannelContract, String targetChannelFull,
+                    String targetChannelPartial, String targetRoleFullRevive, String targetRolePartRevive,
+                    String tornApiKey, Set<String> contractFactionIds) {
         this.targetServerId = targetServerId;
-        this.targetChannelId = targetChannelId;
-        this.targetRoleId = targetRoleId;
+        this.targetChannelContract = targetChannelContract;
+        this.targetChannelFull = targetChannelFull;
+        this.targetChannelPartial = targetChannelPartial;
+        this.targetRoleFullRevive = targetRoleFullRevive;
+        this.targetRolePartRevive = targetRolePartRevive;
         this.tornApiKey = tornApiKey;
+        this.contractFactionIds = contractFactionIds;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -136,7 +149,7 @@ public class ClaimBot extends ListenerAdapter {
     private void sendReviveRequest(SlashCommandInteractionEvent event, TornProfile profile,
                                    String requestorName, boolean fullRevive) {
         try {
-            // Get target guild and channel
+            // Get target guild
             Guild targetGuild = jda.getGuildById(targetServerId);
             if (targetGuild == null) {
                 System.err.println("❌ Target server not found!");
@@ -144,9 +157,31 @@ public class ClaimBot extends ListenerAdapter {
                 return;
             }
 
+            // Determine which channel and role to use
+            String targetChannelId;
+            String targetRoleId;
+            String channelType;
+
+            // Check if user is from a contract faction and requesting full revive
+            boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
+
+            if (fullRevive && isContractFaction) {
+                targetChannelId = targetChannelContract;
+                targetRoleId = targetRoleFullRevive;
+                channelType = "Contract";
+            } else if (fullRevive) {
+                targetChannelId = targetChannelFull;
+                targetRoleId = targetRoleFullRevive;
+                channelType = "Full Revive";
+            } else {
+                targetChannelId = targetChannelPartial;
+                targetRoleId = targetRolePartRevive;
+                channelType = "Partial Revive";
+            }
+
             TextChannel targetChannel = targetGuild.getTextChannelById(targetChannelId);
             if (targetChannel == null) {
-                System.err.println("❌ Target channel not found!");
+                System.err.println("❌ Target channel not found: " + channelType);
                 event.getHook().editOriginal("⚠️ Configuration error. Please contact the bot administrator.").queue();
                 return;
             }
@@ -166,8 +201,14 @@ public class ClaimBot extends ListenerAdapter {
                     .setTitle("💉 New Revive Request")
                     .addField("👤 User", "[" + profile.name + "](" + profileUrl + ")", true)
                     .addField("🆔 User ID", String.valueOf(profile.id), true)
-                    .addField("🏥 Full Revive", fullRevive ? "✅ Yes" : "❌ No", true)
-                    .addField("🏠 Server", event.getGuild().getName(), true)
+                    .addField("🏥 Full Revive", fullRevive ? "✅ Yes" : "❌ No", true);
+
+            // Add faction info if contract
+            if (isContractFaction && fullRevive) {
+                embedBuilder.addField("⭐ Type", "Contract Faction", true);
+            }
+
+            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
@@ -202,11 +243,14 @@ public class ClaimBot extends ListenerAdapter {
                         activeClaims.put(claimId, claimData);
 
                         // Confirm to user
-                        String fullReviveText = fullRevive ? " (Full Revive requested)" : "";
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + fullReviveText).queue();
+                        String reviveTypeText = isContractFaction && fullRevive ? " (Contract - Full Revive)"
+                                : fullRevive ? " (Full Revive requested)"
+                                : " (Partial Revive requested)";
+                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText).queue();
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
-                                event.getGuild().getName() + (fullRevive ? " (Full Revive)" : ""));
+                                event.getGuild().getName() + " to " + channelType + " channel" +
+                                (fullRevive ? " (Full Revive)" : " (Partial Revive)"));
 
                         // Clean up old claims after 24 hours
                         scheduleClaimCleanup(claimId);
@@ -272,7 +316,7 @@ public class ClaimBot extends ListenerAdapter {
 
         MessageEmbed originalEmbed = message.getEmbeds().get(0);
 
-        // Create updated embed - keep original color (red for full revive, blue for normal)
+        // Create updated embed - change to green when claimed
         EmbedBuilder updatedEmbed = new EmbedBuilder(originalEmbed)
                 .setColor(Color.decode("#57F287")) // Green for claimed
                 .addField("✅ Claimed By", claimerDisplayName, true)
@@ -332,6 +376,18 @@ public class ClaimBot extends ListenerAdapter {
             profile.statusState = statusObj != null && statusObj.has("state") ?
                     statusObj.get("state").getAsString() : "Unknown";
 
+            // Get faction ID
+            if (profileObj.has("faction")) {
+                JsonObject factionObj = profileObj.getAsJsonObject("faction");
+                if (factionObj.has("id")) {
+                    profile.factionId = factionObj.get("id").getAsInt();
+                } else {
+                    profile.factionId = 0; // No faction
+                }
+            } else {
+                profile.factionId = 0; // No faction
+            }
+
             return profile;
 
         } catch (IOException e) {
@@ -361,6 +417,7 @@ public class ClaimBot extends ListenerAdapter {
         String name;
         boolean revivable;
         String statusState;
+        int factionId;
     }
 
     public static void main(String[] args) {
@@ -370,37 +427,64 @@ public class ClaimBot extends ListenerAdapter {
         // Get configuration from environment variables
         String token = System.getenv("DISCORD_TOKEN");
         String targetServerId = System.getenv("TARGET_SERVER_ID");
-        String targetChannelId = System.getenv("TARGET_CHANNEL_ID");
-        String targetRoleId = System.getenv("TARGET_ROLE_ID");
+        String targetChannelContract = System.getenv("TARGET_CHANNEL_CONTRACT");
+        String targetChannelFull = System.getenv("TARGET_CHANNEL_FULL");
+        String targetChannelPartial = System.getenv("TARGET_CHANNEL_PARTIAL");
+        String targetRoleFullRevive = System.getenv("TARGET_ROLE_ID_FULL_REVIVE");
+        String targetRolePartRevive = System.getenv("TARGET_ROLE_ID_PART_REVIVE");
         String tornApiKey = System.getenv("TORN_API_KEY");
+        String contractFactionIdsStr = System.getenv("CONTRACT_FACTION_IDS");
 
         // Validate configuration
         if (token == null || token.isEmpty()) {
-            System.err.println("DISCORD_TOKEN environment variable is not set!");
+            System.err.println("❌ DISCORD_TOKEN environment variable is not set!");
             System.exit(1);
         }
         if (targetServerId == null || targetServerId.isEmpty()) {
-            System.err.println("TARGET_SERVER_ID environment variable is not set!");
+            System.err.println("❌ TARGET_SERVER_ID environment variable is not set!");
             System.exit(1);
         }
-        if (targetChannelId == null || targetChannelId.isEmpty()) {
-            System.err.println("TARGET_CHANNEL_ID environment variable is not set!");
+        if (targetChannelContract == null || targetChannelContract.isEmpty()) {
+            System.err.println("❌ TARGET_CHANNEL_CONTRACT environment variable is not set!");
             System.exit(1);
         }
-        if (targetRoleId == null || targetRoleId.isEmpty()) {
-            System.err.println("TARGET_ROLE_ID environment variable is not set!");
+        if (targetChannelFull == null || targetChannelFull.isEmpty()) {
+            System.err.println("❌ TARGET_CHANNEL_FULL environment variable is not set!");
+            System.exit(1);
+        }
+        if (targetChannelPartial == null || targetChannelPartial.isEmpty()) {
+            System.err.println("❌ TARGET_CHANNEL_PARTIAL environment variable is not set!");
+            System.exit(1);
+        }
+        if (targetRoleFullRevive == null || targetRoleFullRevive.isEmpty()) {
+            System.err.println("❌ TARGET_ROLE_ID_FULL_REVIVE environment variable is not set!");
+            System.exit(1);
+        }
+        if (targetRolePartRevive == null || targetRolePartRevive.isEmpty()) {
+            System.err.println("❌ TARGET_ROLE_ID_PART_REVIVE environment variable is not set!");
             System.exit(1);
         }
         if (tornApiKey == null || tornApiKey.isEmpty()) {
-            System.err.println("TORN_API_KEY environment variable is not set!");
+            System.err.println("❌ TORN_API_KEY environment variable is not set!");
             System.exit(1);
         }
 
-        System.out.println("Configuration validated");
+        // Parse contract faction IDs
+        Set<String> contractFactionIds = new HashSet<>();
+        if (contractFactionIdsStr != null && !contractFactionIdsStr.isEmpty()) {
+            contractFactionIds.addAll(Arrays.asList(contractFactionIdsStr.split(",")));
+            System.out.println("✅ Loaded " + contractFactionIds.size() + " contract faction IDs");
+        } else {
+            System.out.println("⚠️ No contract faction IDs configured");
+        }
+
+        System.out.println("✅ Configuration validated");
         System.out.println("Connecting to Discord...");
 
         try {
-            ClaimBot bot = new ClaimBot(targetServerId, targetChannelId, targetRoleId, tornApiKey);
+            ClaimBot bot = new ClaimBot(targetServerId, targetChannelContract, targetChannelFull,
+                    targetChannelPartial, targetRoleFullRevive, targetRolePartRevive,
+                    tornApiKey, contractFactionIds);
 
             // Create custom HTTP client with longer timeouts
             OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -427,15 +511,17 @@ public class ClaimBot extends ListenerAdapter {
             jda.awaitReady();
 
             System.out.println("=====================================");
-            System.out.println("Bot is ready! Logged in as " + jda.getSelfUser().getAsTag());
-            System.out.println("Serving " + jda.getGuilds().size() + " servers");
-            System.out.println("Target Server ID: " + targetServerId);
-            System.out.println("Target Channel ID: " + targetChannelId);
+            System.out.println("✅ Bot is ready! Logged in as " + jda.getSelfUser().getAsTag());
+            System.out.println("📊 Serving " + jda.getGuilds().size() + " servers");
+            System.out.println("🎯 Target Server ID: " + targetServerId);
+            System.out.println("📢 Contract Channel: " + targetChannelContract);
+            System.out.println("📢 Full Revive Channel: " + targetChannelFull);
+            System.out.println("📢 Partial Revive Channel: " + targetChannelPartial);
             System.out.println("=====================================");
 
         } catch (Exception e) {
             System.err.println("=====================================");
-            System.err.println("Failed to start bot: " + e.getClass().getSimpleName());
+            System.err.println("❌ Failed to start bot: " + e.getClass().getSimpleName());
             System.err.println("Error details: " + e.getMessage());
             System.err.println("=====================================");
 
