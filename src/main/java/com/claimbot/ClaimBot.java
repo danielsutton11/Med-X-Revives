@@ -9,9 +9,12 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
-import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
@@ -54,34 +57,42 @@ public class ClaimBot extends ListenerAdapter {
     }
 
     @Override
-    public void onMessageReceived(MessageReceivedEvent event) {
-        // Ignore bot messages
-        if (event.getAuthor().isBot()) {
+    public void onReady(ReadyEvent event) {
+        // Register slash commands globally
+        event.getJDA().updateCommands().addCommands(
+                Commands.slash("r", "Request a revive")
+                        .addOption(OptionType.STRING, "userid", "Torn user ID (optional - leave blank to use your own)", false)
+                        .addOption(OptionType.BOOLEAN, "fullrevive", "Request a full revive (requires Full Revive skill)", false)
+        ).queue();
+
+        System.out.println("✅ Slash commands registered!");
+    }
+
+    @Override
+    public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
+        if (!event.getName().equals("r")) {
             return;
         }
 
-        // Check for !r command
-        String content = event.getMessage().getContentRaw().trim();
-        if (content.toLowerCase().startsWith("!r")) {
-            handleClaimRequest(event);
-        }
-    }
+        // Defer reply to prevent timeout
+        event.deferReply(true).queue();
 
-    private void handleClaimRequest(MessageReceivedEvent event) {
-        String content = event.getMessage().getContentRaw().trim();
-        String[] parts = content.split("\\s+");
+        String providedUserId = event.getOption("userid") != null ?
+                event.getOption("userid").getAsString() : null;
+        Boolean fullRevive = event.getOption("fullrevive") != null ?
+                event.getOption("fullrevive").getAsBoolean() : true;
 
         String userId;
         String requestorDiscordId = null;
         boolean isManualId = false;
 
         // Check if user provided a Torn ID
-        if (parts.length > 1 && parts[1].matches("\\d+")) {
-            userId = parts[1];
-            requestorDiscordId = event.getAuthor().getId();
+        if (providedUserId != null && providedUserId.matches("\\d+")) {
+            userId = providedUserId;
+            requestorDiscordId = event.getUser().getId();
             isManualId = true;
         } else {
-            userId = event.getAuthor().getId();
+            userId = event.getUser().getId();
             isManualId = false;
         }
 
@@ -90,22 +101,22 @@ public class ClaimBot extends ListenerAdapter {
 
         if (profile == null) {
             if (isManualId) {
-                event.getMessage().reply("❌ Revive request not submitted - Could not identify torn user: " + userId).queue();
+                event.getHook().editOriginal("❌ Revive request not submitted - Could not identify torn user: " + userId).queue();
             } else {
-                event.getMessage().reply("❌ Revive request not submitted - Your discord account is not linked to Torn").queue();
+                event.getHook().editOriginal("❌ Revive request not submitted - Your discord account is not linked to Torn").queue();
             }
             return;
         }
 
         // Check if user is revivable
         if (!profile.revivable && profile.id != 1561637) {
-            event.getMessage().reply("❌ Revive request not submitted - Please switch on your revives and submit a new request").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - Please switch on your revives and submit a new request").queue();
             return;
         }
 
         // Check if user is in hospital
         if (!"Hospital".equalsIgnoreCase(profile.statusState)) {
-            event.getMessage().reply("❌ Revive request not submitted - User is not in the hospital").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - User is not in the hospital").queue();
             return;
         }
 
@@ -119,23 +130,24 @@ public class ClaimBot extends ListenerAdapter {
         }
 
         // All checks passed, send the revive request
-        sendReviveRequest(event, profile, requestorName);
+        sendReviveRequest(event, profile, requestorName, fullRevive);
     }
 
-    private void sendReviveRequest(MessageReceivedEvent event, TornProfile profile, String requestorName) {
+    private void sendReviveRequest(SlashCommandInteractionEvent event, TornProfile profile,
+                                   String requestorName, boolean fullRevive) {
         try {
             // Get target guild and channel
             Guild targetGuild = jda.getGuildById(targetServerId);
             if (targetGuild == null) {
                 System.err.println("❌ Target server not found!");
-                event.getMessage().reply("⚠️ Configuration error. Please contact the bot administrator.").queue();
+                event.getHook().editOriginal("⚠️ Configuration error. Please contact the bot administrator.").queue();
                 return;
             }
 
             TextChannel targetChannel = targetGuild.getTextChannelById(targetChannelId);
             if (targetChannel == null) {
                 System.err.println("❌ Target channel not found!");
-                event.getMessage().reply("⚠️ Configuration error. Please contact the bot administrator.").queue();
+                event.getHook().editOriginal("⚠️ Configuration error. Please contact the bot administrator.").queue();
                 return;
             }
 
@@ -145,19 +157,23 @@ public class ClaimBot extends ListenerAdapter {
             // Create profile URL
             String profileUrl = "https://www.torn.com/profiles.php?XID=" + profile.id;
 
+            // Set color based on full revive request
+            Color embedColor = fullRevive ? Color.decode("#ED4245") : Color.decode("#5865F2");
+
             // Create embed for the revive request
             EmbedBuilder embedBuilder = new EmbedBuilder()
-                    .setColor(Color.decode("#5865F2"))
+                    .setColor(embedColor)
                     .setTitle("💉 New Revive Request")
                     .addField("👤 User", "[" + profile.name + "](" + profileUrl + ")", true)
                     .addField("🆔 User ID", String.valueOf(profile.id), true)
+                    .addField("🏥 Full Revive", fullRevive ? "✅ Yes" : "❌ No", true)
                     .addField("🏠 Server", event.getGuild().getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
             // Add requestor field if there is one
             if (requestorName != null) {
-                TornProfile requestorProfile = fetchTornProfile(event.getAuthor().getId());
+                TornProfile requestorProfile = fetchTornProfile(event.getUser().getId());
                 if (requestorProfile != null) {
                     String requestorUrl = "https://www.torn.com/profiles.php?XID=" + requestorProfile.id;
                     embedBuilder.addField("📝 Requestor", "[" + requestorName + "](" + requestorUrl + ")", true);
@@ -173,34 +189,36 @@ public class ClaimBot extends ListenerAdapter {
                     .setContent("<@&" + targetRoleId + ">")
                     .setActionRow(claimButton, claimedButton)
                     .queue(claimMessage -> {
-                        // Store claim information
+                        // Store claim information with full revive flag
                         ClaimData claimData = new ClaimData(
                                 String.valueOf(profile.id),
                                 profile.name,
                                 event.getGuild().getName(),
                                 event.getChannel().getName(),
                                 claimMessage.getId(),
-                                System.currentTimeMillis()
+                                System.currentTimeMillis(),
+                                fullRevive
                         );
                         activeClaims.put(claimId, claimData);
 
                         // Confirm to user
-                        event.getMessage().reply("✅ Your revive request has been submitted!").queue();
+                        String fullReviveText = fullRevive ? " (Full Revive requested)" : "";
+                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + fullReviveText).queue();
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
-                                event.getGuild().getName());
+                                event.getGuild().getName() + (fullRevive ? " (Full Revive)" : ""));
 
                         // Clean up old claims after 24 hours
                         scheduleClaimCleanup(claimId);
                     }, error -> {
                         System.err.println("Error sending revive message: " + error.getMessage());
-                        event.getMessage().reply("⚠️ An error occurred while processing your request.").queue();
+                        event.getHook().editOriginal("⚠️ An error occurred while processing your request.").queue();
                     });
 
         } catch (Exception e) {
             System.err.println("Error handling revive request: " + e.getMessage());
             e.printStackTrace();
-            event.getMessage().reply("⚠️ An error occurred while processing your request.").queue();
+            event.getHook().editOriginal("⚠️ An error occurred while processing your request.").queue();
         }
     }
 
@@ -254,9 +272,9 @@ public class ClaimBot extends ListenerAdapter {
 
         MessageEmbed originalEmbed = message.getEmbeds().get(0);
 
-        // Create updated embed
+        // Create updated embed - keep original color (red for full revive, blue for normal)
         EmbedBuilder updatedEmbed = new EmbedBuilder(originalEmbed)
-                .setColor(Color.decode("#57F287"))
+                .setColor(Color.decode("#57F287")) // Green for claimed
                 .addField("✅ Claimed By", claimerDisplayName, true)
                 .addField("⏰ Claimed At", "<t:" + (claimData.getClaimedAt() / 1000) + ":F>", true);
 
@@ -399,7 +417,7 @@ public class ClaimBot extends ListenerAdapter {
                     )
                     .disableCache(CacheFlag.VOICE_STATE, CacheFlag.EMOJI, CacheFlag.STICKER)
                     .setStatus(OnlineStatus.ONLINE)
-                    .setActivity(Activity.watching("for !r commands"))
+                    .setActivity(Activity.watching("for /r commands"))
                     .addEventListeners(bot)
                     .build();
 

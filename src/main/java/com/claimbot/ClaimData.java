@@ -7,19 +7,21 @@ public class ClaimData {
     private final String channelName;
     private final String messageId;
     private final long timestamp;
-    
+    private final boolean fullRevive;
+
     private boolean claimed;
     private String claimedBy;
     private long claimedAt;
 
-    public ClaimData(String userId, String userTag, String guildName, 
-                     String channelName, String messageId, long timestamp) {
+    public ClaimData(String userId, String userTag, String guildName,
+                     String channelName, String messageId, long timestamp, boolean fullRevive) {
         this.userId = userId;
         this.userTag = userTag;
         this.guildName = guildName;
         this.channelName = channelName;
         this.messageId = messageId;
         this.timestamp = timestamp;
+        this.fullRevive = fullRevive;
         this.claimed = false;
     }
 
@@ -46,6 +48,10 @@ public class ClaimData {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public boolean isFullRevive() {
+        return fullRevive;
     }
 
     public boolean isClaimed() {
