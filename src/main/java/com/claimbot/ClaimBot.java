@@ -184,10 +184,11 @@ public class ClaimBot extends ListenerAdapter {
                         );
                         activeClaims.put(claimId, claimData);
 
-                        // Confirm to user (only if not in target server)
-                        if (!event.getGuild().getId().equals(targetServerId)) {
-                            event.getMessage().reply("✅ Your revive request has been submitted!").queue();
-                        }
+                        // Confirm to user
+                        
+                        event.getMessage().reply("✅ Your revive request has been submitted!").queue();
+                        
+                    
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
                                 event.getGuild().getName());
