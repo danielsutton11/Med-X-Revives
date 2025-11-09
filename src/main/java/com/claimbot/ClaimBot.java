@@ -13,11 +13,14 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.interactions.components.text.TextInput;
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
 import net.dv8tion.jda.api.interactions.modals.Modal;
@@ -34,7 +37,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -104,14 +106,12 @@ public class ClaimBot extends ListenerAdapter {
             EmbedBuilder instructionsEmbed = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
                     .setTitle("🏥 Med X Revive Service - Reviving Guide")
-                    .setDescription("""
-                            **Customers Guide**
-                            • When in Hospital, click the 'Revive Me' button
-                            • Fill in the Modal
-                            • Click Submit and be patient
-                            • Once complete, pay the Reviver
-                            
-                            *If any issues please contact Dsuttz [1561637]*""")
+                    .setDescription("**Customers Guide**\n" +
+                            "• When in Hospital, click the 'Revive Me' button\n" +
+                            "• Fill in the Modal\n" +
+                            "• Click Submit and be patient\n" +
+                            "• Once complete, pay the Reviver\n\n" +
+                            "*If any issues please Create a Ticket*")
                     .setTimestamp(Instant.now());
 
             channel.sendMessageEmbeds(instructionsEmbed.build()).queue();
@@ -120,7 +120,8 @@ public class ClaimBot extends ListenerAdapter {
             EmbedBuilder buttonEmbed = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
                     .setTitle("🏥 Med X Revive Service - Request Revive")
-                    .setDescription("To request a revive, click the button below!");
+                    .setDescription("To request a revive, click the button below!")
+                    .setFooter("Click the button below to request a revive!");
 
             Button reviveMeButton = Button.primary("revive_me", "Revive Me");
             Button reviveSomeoneButton = Button.secondary("revive_someone", "Revive Someone Else");
@@ -159,6 +160,31 @@ public class ClaimBot extends ListenerAdapter {
         }
     }
 
+    @Override
+    public void onStringSelectInteraction(StringSelectInteractionEvent event) {
+        if (event.getComponentId().equals("revive_type_select")) {
+            handleReviveTypeSelect(event);
+        }
+    }
+
+    private void handleReviveTypeSelect(StringSelectInteractionEvent event) {
+        // Get the selected revive type
+        String reviveType = event.getValues().get(0); // "full" or "partial"
+        
+        // Create modal for entering Torn ID
+        TextInput userIdInput = TextInput.create("target_userid", "The Target", TextInputStyle.SHORT)
+                .setPlaceholder("Torn User ID or Profile Link")
+                .setRequired(true)
+                .build();
+
+        // Store the revive type in the modal ID so we can retrieve it later
+        Modal modal = Modal.create("revive_someone_modal_" + reviveType, "Request Revive for Someone")
+                .addActionRow(userIdInput)
+                .build();
+
+        event.replyModal(modal).queue();
+    }
+
     private void handleReviveMeButton(ButtonInteractionEvent event) {
         // Defer to show we're processing
         event.deferReply(true).queue();
@@ -187,29 +213,23 @@ public class ClaimBot extends ListenerAdapter {
     }
 
     private void handleReviveSomeoneButton(ButtonInteractionEvent event) {
-        // Create modal for "Revive Someone Else" with ID and revive type
-        TextInput userIdInput = TextInput.create("target_userid", "The Target", TextInputStyle.SHORT)
-                .setPlaceholder("Torn User ID or Profile Link")
-                .setRequired(true)
+        // Show a dropdown menu to select revive type
+        StringSelectMenu selectMenu = StringSelectMenu.create("revive_type_select")
+                .setPlaceholder("Select Revive Type")
+                .addOption("Full Revive (Defensive)", "full", "Request a full revive")
+                .addOption("Partial Revive (Offensive)", "partial", "Request a partial revive")
+                .setDefaultValues("full")
                 .build();
 
-        TextInput reviveTypeInput = TextInput.create("revive_type", "Revive Type", TextInputStyle.SHORT)
-                .setPlaceholder("Full Revive (Defensive) or Partial Revive (Offensive)")
-                .setValue("Full Revive (Defensive)")
-                .setRequired(false)
-                .build();
-
-        Modal modal = Modal.create("revive_someone_modal", "Request Revive for Someone")
-                .addActionRow(userIdInput)
-                .addActionRow(reviveTypeInput)
-                .build();
-
-        event.replyModal(modal).queue();
+        event.reply("Please select the revive type:")
+                .addActionRow(selectMenu)
+                .setEphemeral(true)
+                .queue();
     }
 
     @Override
     public void onModalInteraction(ModalInteractionEvent event) {
-        if (event.getModalId().equals("revive_someone_modal")) {
+        if (event.getModalId().startsWith("revive_someone_modal")) {
             handleReviveSomeoneModal(event);
         }
     }
@@ -217,14 +237,11 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveSomeoneModal(ModalInteractionEvent event) {
         event.deferReply(true).queue();
 
-        String targetUserIdInput = Objects.requireNonNull(event.getValue("target_userid")).getAsString().trim();
+        String targetUserIdInput = event.getValue("target_userid").getAsString().trim();
         
-        // Get revive type from modal (defaults to full if not specified or invalid)
-        String reviveTypeStr = event.getValue("revive_type") != null ? 
-                Objects.requireNonNull(event.getValue("revive_type")).getAsString().toLowerCase() : "full";
-        
-        // Check if it contains "partial" or "offensive" for partial revive
-        boolean fullRevive = !reviveTypeStr.contains("partial") && !reviveTypeStr.contains("offensive");
+        // Extract revive type from modal ID (format: "revive_someone_modal_full" or "revive_someone_modal_partial")
+        String modalId = event.getModalId();
+        boolean fullRevive = modalId.contains("_full");
         
         // Extract just the first user ID from the input
         String targetUserId = extractFirstUserId(targetUserIdInput);
@@ -257,7 +274,7 @@ public class ClaimBot extends ListenerAdapter {
         TornProfile requestorProfile = fetchTornProfile(requestorDiscordId);
         String requestorName = requestorProfile != null ? requestorProfile.name : null;
 
-        // Use the revive type from modal
+        // Use the revive type from modal ID
         processReviveRequestFromModal(event, profile, requestorName, fullRevive);
     }
 
@@ -445,7 +462,7 @@ public class ClaimBot extends ListenerAdapter {
                 embedBuilder.addField("⭐ Type", "Contract Faction", true);
             }
 
-            embedBuilder.addField("🏠 Server", Objects.requireNonNull(event.getGuild()).getName(), true)
+            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
@@ -569,7 +586,6 @@ public class ClaimBot extends ListenerAdapter {
                 return null;
             }
 
-            assert response.body() != null;
             String responseBody = response.body().string();
             JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
 
