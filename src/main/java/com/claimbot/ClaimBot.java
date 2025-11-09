@@ -220,7 +220,6 @@ public class ClaimBot extends ListenerAdapter {
                 .setPlaceholder("Select Revive Type")
                 .addOption("Full Revive (Defensive)", "full", "Request a full revive")
                 .addOption("Partial Revive (Offensive)", "partial", "Request a partial revive")
-                .setDefaultValues("full")
                 .build();
 
         event.reply("Please select the revive type:")
