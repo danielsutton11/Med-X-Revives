@@ -35,6 +35,7 @@ import java.awt.Color;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -236,7 +237,7 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveSomeoneModal(ModalInteractionEvent event) {
         event.deferReply(true).queue();
 
-        String targetUserIdInput = event.getValue("target_userid").getAsString().trim();
+        String targetUserIdInput = Objects.requireNonNull(event.getValue("target_userid")).getAsString().trim();
         
         // Extract revive type from modal ID (format: "revive_someone_modal_full" or "revive_someone_modal_partial")
         String modalId = event.getModalId();
@@ -369,7 +370,7 @@ public class ClaimBot extends ListenerAdapter {
                 embedBuilder.addField("⭐ Type", "Contract Faction", true);
             }
 
-            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
+            embedBuilder.addField("🏠 Server", Objects.requireNonNull(event.getGuild()).getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
@@ -474,10 +475,10 @@ public class ClaimBot extends ListenerAdapter {
                     .addField("🏥 Full Revive", fullRevive ? "✅ Yes" : "❌ No", true);
 
             if (isContractFaction && fullRevive) {
-                embedBuilder.addField("⭐ Type", "Contract Faction", true);
+                embedBuilder.addField("⭐ Type", "Contract", true);
             }
 
-            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
+            embedBuilder.addField("🏠 Server", Objects.requireNonNull(event.getGuild()).getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
