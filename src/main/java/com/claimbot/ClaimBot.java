@@ -132,7 +132,7 @@ public class ClaimBot extends ListenerAdapter {
                     .queue(success -> {
                         event.getHook().editOriginal("✅ Revive request channel setup complete!").queue();
                     }, error -> {
-                        event.getHook().editOriginal("❌ Error setting up channel: " + error.getMessage()).queue();
+                        event.getHook().editOriginal("❌ Error setting up channel: " + error.getMessage()).queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
                     });
 
         } catch (Exception e) {
@@ -184,6 +184,12 @@ public class ClaimBot extends ListenerAdapter {
                 .build();
 
         event.replyModal(modal).queue();
+
+        // Delete the selection menu message after modal opens
+        event.getMessage().delete().queue(
+                success -> {},
+                error -> {} // Ignore errors if already deleted
+        );
     }
 
     private void handleReviveMeButton(ButtonInteractionEvent event) {
@@ -195,17 +201,17 @@ public class ClaimBot extends ListenerAdapter {
         TornProfile profile = fetchTornProfile(userId);
 
         if (profile == null) {
-            event.getHook().editOriginal("❌ Revive request not submitted - Your discord account is not linked to Torn").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - Your discord account is not linked to Torn").queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
         if (!profile.revivable && profile.id != 1561637) {
-            event.getHook().editOriginal("❌ Revive request not submitted - Please switch on your revives and submit a new request").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - Please switch on your revives and submit a new request").queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
         if (!"Hospital".equalsIgnoreCase(profile.statusState)) {
-            event.getHook().editOriginal("❌ Revive request not submitted - You are not in the hospital").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - You are not in the hospital").queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
@@ -247,7 +253,7 @@ public class ClaimBot extends ListenerAdapter {
         String targetUserId = extractFirstUserId(targetUserIdInput);
 
         if (targetUserId == null || !targetUserId.matches("\\d+")) {
-            event.getHook().editOriginal("❌ Could not extract a valid Torn user ID from: " + targetUserIdInput).queue();
+            event.getHook().editOriginal("❌ Could not extract a valid Torn user ID from: " + targetUserIdInput).queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
@@ -255,17 +261,17 @@ public class ClaimBot extends ListenerAdapter {
         TornProfile profile = fetchTornProfile(targetUserId);
 
         if (profile == null) {
-            event.getHook().editOriginal("❌ Revive request not submitted - Could not identify torn user: " + targetUserId).queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - Could not identify torn user: " + targetUserId).queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
         if (!profile.revivable && profile.id != 1561637) {
-            event.getHook().editOriginal("❌ Revive request not submitted - Target user does not have revives enabled").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - Target user does not have revives enabled").queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
         if (!"Hospital".equalsIgnoreCase(profile.statusState)) {
-            event.getHook().editOriginal("❌ Revive request not submitted - User is not in the hospital").queue();
+            event.getHook().editOriginal("❌ Revive request not submitted - User is not in the hospital").queue(message -> message.delete().queueAfter(15, TimeUnit.SECONDS));
             return;
         }
 
@@ -403,8 +409,11 @@ public class ClaimBot extends ListenerAdapter {
                         String reviveTypeText = isContractFaction && fullRevive ? " (Contract - Full Revive)"
                                 : fullRevive ? " (Full Revive requested)"
                                 : " (Partial Revive requested)";
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText).queue();
-
+                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText)
+                                .queue(message -> {
+                                    // Delete after 5 seconds
+                                    message.delete().queueAfter(15, TimeUnit.SECONDS);
+                                });
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
                                 event.getGuild().getName() + " to " + channelType + " channel" +
                                 (fullRevive ? " (Full Revive)" : " (Partial Revive)"));
