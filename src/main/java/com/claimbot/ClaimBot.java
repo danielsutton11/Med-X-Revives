@@ -625,7 +625,13 @@ public class ClaimBot extends ListenerAdapter {
             profile.revivable = profileObj.get("revivable").getAsBoolean();
             profile.statusState = statusObj != null && statusObj.has("state") ?
                     statusObj.get("state").getAsString() : "Unknown";
-            profile.factionId = profileObj.get("faction_id").getAsInt();
+
+            // Handle null faction_id (players not in a faction)
+            if (profileObj.has("faction_id") && !profileObj.get("faction_id").isJsonNull()) {
+                profile.factionId = profileObj.get("faction_id").getAsInt();
+            } else {
+                profile.factionId = 0; // Default to 0 if no faction
+            }
 
             return profile;
 
