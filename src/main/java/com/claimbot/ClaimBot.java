@@ -17,7 +17,6 @@ import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionE
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
-import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
@@ -37,6 +36,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -106,12 +106,14 @@ public class ClaimBot extends ListenerAdapter {
             EmbedBuilder instructionsEmbed = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
                     .setTitle("🏥 Med X Revive Service - Reviving Guide")
-                    .setDescription("**Customers Guide**\n" +
-                            "• When in Hospital, click the 'Revive Me' button\n" +
-                            "• Fill in the Modal\n" +
-                            "• Click Submit and be patient\n" +
-                            "• Once complete, pay the Reviver\n\n" +
-                            "*If any issues please Create a Ticket*")
+                    .setDescription("""
+                            **Customers Guide**
+                            • When in Hospital, click the 'Revive Me' button
+                            • Fill in the Modal
+                            • Click Submit and be patient
+                            • Once complete, pay the Reviver
+                            
+                            **If any issues please contact Dsuttz [1561637]**""")
                     .setTimestamp(Instant.now());
 
             channel.sendMessageEmbeds(instructionsEmbed.build()).queue();
@@ -237,7 +239,7 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveSomeoneModal(ModalInteractionEvent event) {
         event.deferReply(true).queue();
 
-        String targetUserIdInput = event.getValue("target_userid").getAsString().trim();
+        String targetUserIdInput = Objects.requireNonNull(event.getValue("target_userid")).getAsString().trim();
         
         // Extract revive type from modal ID (format: "revive_someone_modal_full" or "revive_someone_modal_partial")
         String modalId = event.getModalId();
@@ -362,7 +364,7 @@ public class ClaimBot extends ListenerAdapter {
                 embedBuilder.addField("⭐ Type", "Contract Faction", true);
             }
 
-            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
+            embedBuilder.addField("🏠 Server", Objects.requireNonNull(event.getGuild()).getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
@@ -586,6 +588,7 @@ public class ClaimBot extends ListenerAdapter {
                 return null;
             }
 
+            assert response.body() != null;
             String responseBody = response.body().string();
             JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
 
