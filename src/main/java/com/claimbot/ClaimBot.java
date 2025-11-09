@@ -414,10 +414,11 @@ public class ClaimBot extends ListenerAdapter {
                                 : fullRevive ? " (Full Revive requested)"
                                 : " (Partial Revive requested)";
 
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText).queue();
-
-                        // Then schedule the deletion
-                        event.getHook().deleteOriginal().queueAfter(15, TimeUnit.SECONDS);
+                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText)
+                                .queue(message -> {
+                                    // Delete after the edit completes successfully
+                                    message.delete().queueAfter(15, TimeUnit.SECONDS);
+                                });
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
                                 event.getGuild().getName() + " to " + channelType + " channel" +
@@ -525,10 +526,12 @@ public class ClaimBot extends ListenerAdapter {
                         String reviveTypeText = isContractFaction && fullRevive ? " (Contract - Full Revive)"
                                 : fullRevive ? " (Full Revive requested)"
                                 : " (Partial Revive requested)";
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText).queue();
 
-                        // Then schedule the deletion
-                        event.getHook().deleteOriginal().queueAfter(15, TimeUnit.SECONDS);
+                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText)
+                                .queue(message -> {
+                                    // Delete after the edit completes successfully
+                                    message.delete().queueAfter(15, TimeUnit.SECONDS);
+                                });
 
                         System.out.println("Revive request sent for " + profile.name + " [" + profile.id + "] from " +
                                 event.getGuild().getName() + " to " + channelType + " channel" +
