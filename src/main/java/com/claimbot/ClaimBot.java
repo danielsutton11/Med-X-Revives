@@ -107,11 +107,15 @@ public class ClaimBot extends ListenerAdapter {
                     .setTitle("🏥 Med X Revive Service - Reviving Guide")
                     .setDescription("""
                             **Customers Guide**
-                            • When in Hospital, click the 'Revive Me' button
-                            • Fill in the Modal
-                            • Click Submit and be patient
+                           \s
+                            • When in Hospital, click the 'Revive Me' button to revive yourself (Full Revive)
+                           \s
+                            • To revive someone else, click "Revive Someone Else", select the revive type (Partial / Full)
+                            • Enter the target user ID or Profile link and click submit. \s
+                           \s
+                            • Be patient.\s
                             • Once complete, pay the Reviver 2 Xanax unless under contract.
-                            
+                          \s
                             *If any issues please contact Dsuttz [1561637]*""")
                     .setTimestamp(Instant.now());
 
