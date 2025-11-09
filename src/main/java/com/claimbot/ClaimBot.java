@@ -17,6 +17,7 @@ import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionE
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
@@ -36,7 +37,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -106,14 +106,12 @@ public class ClaimBot extends ListenerAdapter {
             EmbedBuilder instructionsEmbed = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
                     .setTitle("🏥 Med X Revive Service - Reviving Guide")
-                    .setDescription("""
-                            **Customers Guide**
-                            • When in Hospital, click the 'Revive Me' button
-                            • Fill in the Modal
-                            • Click Submit and be patient
-                            • Once complete, pay the Reviver
-                            
-                            **If any issues please contact Dsuttz [1561637]**""")
+                    .setDescription("**Customers Guide**\n" +
+                            "• When in Hospital, click the 'Revive Me' button\n" +
+                            "• Fill in the Modal\n" +
+                            "• Click Submit and be patient\n" +
+                            "• Once complete, pay the Reviver\n\n" +
+                            "*If any issues please Create a Ticket*")
                     .setTimestamp(Instant.now());
 
             channel.sendMessageEmbeds(instructionsEmbed.build()).queue();
@@ -220,6 +218,7 @@ public class ClaimBot extends ListenerAdapter {
                 .setPlaceholder("Select Revive Type")
                 .addOption("Full Revive (Defensive)", "full", "Request a full revive")
                 .addOption("Partial Revive (Offensive)", "partial", "Request a partial revive")
+                .setDefaultValues("full")
                 .build();
 
         event.reply("Please select the revive type:")
@@ -238,7 +237,7 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveSomeoneModal(ModalInteractionEvent event) {
         event.deferReply(true).queue();
 
-        String targetUserIdInput = Objects.requireNonNull(event.getValue("target_userid")).getAsString().trim();
+        String targetUserIdInput = event.getValue("target_userid").getAsString().trim();
         
         // Extract revive type from modal ID (format: "revive_someone_modal_full" or "revive_someone_modal_partial")
         String modalId = event.getModalId();
@@ -326,7 +325,13 @@ public class ClaimBot extends ListenerAdapter {
             String targetRoleId;
             String channelType;
 
+            // Debug logging
+            System.out.println("DEBUG: User faction ID: " + profile.factionId);
+            System.out.println("DEBUG: Contract faction IDs: " + contractFactionIds);
+            System.out.println("DEBUG: Checking if " + profile.factionId + " is in contract list");
+            
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
+            System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
             if (fullRevive && isContractFaction) {
                 targetChannelId = targetChannelContract;
@@ -341,6 +346,8 @@ public class ClaimBot extends ListenerAdapter {
                 targetRoleId = targetRolePartRevive;
                 channelType = "Partial Revive";
             }
+
+            System.out.println("DEBUG: Routing to channel type: " + channelType);
 
             TextChannel targetChannel = targetGuild.getTextChannelById(targetChannelId);
             if (targetChannel == null) {
@@ -363,7 +370,7 @@ public class ClaimBot extends ListenerAdapter {
                 embedBuilder.addField("⭐ Type", "Contract Faction", true);
             }
 
-            embedBuilder.addField("🏠 Server", Objects.requireNonNull(event.getGuild()).getName(), true)
+            embedBuilder.addField("🏠 Server", event.getGuild().getName(), true)
                     .addField("⏰ Time", "<t:" + Instant.now().getEpochSecond() + ":F>", false)
                     .setTimestamp(Instant.now());
 
@@ -426,7 +433,13 @@ public class ClaimBot extends ListenerAdapter {
             String targetRoleId;
             String channelType;
 
+            // Debug logging
+            System.out.println("DEBUG: User faction ID: " + profile.factionId);
+            System.out.println("DEBUG: Contract faction IDs: " + contractFactionIds);
+            System.out.println("DEBUG: Checking if " + profile.factionId + " is in contract list");
+            
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
+            System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
             if (fullRevive && isContractFaction) {
                 targetChannelId = targetChannelContract;
@@ -441,6 +454,8 @@ public class ClaimBot extends ListenerAdapter {
                 targetRoleId = targetRolePartRevive;
                 channelType = "Partial Revive";
             }
+
+            System.out.println("DEBUG: Routing to channel type: " + channelType);
 
             TextChannel targetChannel = targetGuild.getTextChannelById(targetChannelId);
             if (targetChannel == null) {
@@ -587,7 +602,6 @@ public class ClaimBot extends ListenerAdapter {
                 return null;
             }
 
-            assert response.body() != null;
             String responseBody = response.body().string();
             JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
 
@@ -706,8 +720,14 @@ public class ClaimBot extends ListenerAdapter {
         // Parse contract faction IDs
         Set<String> contractFactionIds = new HashSet<>();
         if (contractFactionIdsStr != null && !contractFactionIdsStr.isEmpty()) {
-            contractFactionIds.addAll(Arrays.asList(contractFactionIdsStr.split(",")));
-            System.out.println("✅ Loaded " + contractFactionIds.size() + " contract faction IDs");
+            String[] ids = contractFactionIdsStr.split(",");
+            for (String id : ids) {
+                String trimmedId = id.trim();
+                if (!trimmedId.isEmpty() && !trimmedId.equals("0")) {
+                    contractFactionIds.add(trimmedId);
+                }
+            }
+            System.out.println("✅ Loaded " + contractFactionIds.size() + " contract faction IDs: " + contractFactionIds);
         } else {
             System.out.println("⚠️ No contract faction IDs configured");
         }
