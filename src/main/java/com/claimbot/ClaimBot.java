@@ -343,15 +343,18 @@ public class ClaimBot extends ListenerAdapter {
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
             System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
-            if (fullRevive && isContractFaction) {
+            if (isContractFaction) {
+                // Contract faction - always use contract channel
                 targetChannelId = targetChannelContract;
-                targetRoleId = targetRoleFullRevive;
-                channelType = "Contract";
+                targetRoleId = fullRevive ? targetRoleFullRevive : targetRolePartRevive;
+                channelType = fullRevive ? "Contract (Full)" : "Contract (Partial)";
             } else if (fullRevive) {
+                // Non-contract full revive
                 targetChannelId = targetChannelFull;
                 targetRoleId = targetRoleFullRevive;
                 channelType = "Full Revive";
             } else {
+                // Non-contract partial revive
                 targetChannelId = targetChannelPartial;
                 targetRoleId = targetRolePartRevive;
                 channelType = "Partial Revive";
@@ -456,15 +459,18 @@ public class ClaimBot extends ListenerAdapter {
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
             System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
-            if (fullRevive && isContractFaction) {
+            if (isContractFaction) {
+                // Contract faction - always use contract channel
                 targetChannelId = targetChannelContract;
-                targetRoleId = targetRoleFullRevive;
-                channelType = "Contract";
+                targetRoleId = fullRevive ? targetRoleFullRevive : targetRolePartRevive;
+                channelType = fullRevive ? "Contract (Full)" : "Contract (Partial)";
             } else if (fullRevive) {
+                // Non-contract full revive
                 targetChannelId = targetChannelFull;
                 targetRoleId = targetRoleFullRevive;
                 channelType = "Full Revive";
             } else {
+                // Non-contract partial revive
                 targetChannelId = targetChannelPartial;
                 targetRoleId = targetRolePartRevive;
                 channelType = "Partial Revive";
