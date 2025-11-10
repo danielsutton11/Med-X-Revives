@@ -108,6 +108,13 @@ public class ClaimBot extends ListenerAdapter {
     }
 
     private void handleContractFactionRevivableCommand(SlashCommandInteractionEvent event) {
+        // Check if command is used in the contract channel only
+        String currentChannelId = event.getChannel().getId();
+        if (!currentChannelId.equals(targetChannelContract)) {
+            event.reply("❌ This command can only be used in the contract revive channel.").setEphemeral(true).queue();
+            return;
+        }
+
         event.deferReply().queue();
 
         String factionId = Objects.requireNonNull(event.getOption("faction_id")).getAsString().trim();
