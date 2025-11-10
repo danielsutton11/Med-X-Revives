@@ -114,7 +114,8 @@ public class ClaimBot extends ListenerAdapter {
                             • Enter the target user ID or Profile link and click submit. \s
                            \s
                             • Be patient.\s
-                            • Once complete, pay the Reviver 2 Xanax unless under contract.
+                            • Once complete, pay the Reviver 2 Xanax For a full revive or 1 Xanax for a partial revive .\s
+                            unless under contract.
                           \s
                             *If any issues please contact Dsuttz [1561637]*""")
                     .setTimestamp(Instant.now());
@@ -414,10 +415,18 @@ public class ClaimBot extends ListenerAdapter {
                         activeClaims.put(claimId, claimData);
 
                         String reviveTypeText = isContractFaction && fullRevive ? " (Contract - Full Revive)"
+                                : isContractFaction ? "(Contract - Partial Revive)"
                                 : fullRevive ? " (Full Revive requested)"
                                 : " (Partial Revive requested)";
 
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText)
+                        String messageText = "✅ Your revive request has been submitted!";
+                        if(!isContractFaction){
+                            messageText += " - Please pay your reviver 2 Xanax." + reviveTypeText;
+                        }else{
+                            messageText += reviveTypeText;
+                        }
+
+                        event.getHook().editOriginal(messageText)
                                 .queue(message -> {
                                     // Delete after the edit completes successfully
                                     message.delete().queueAfter(15, TimeUnit.SECONDS);
@@ -530,10 +539,18 @@ public class ClaimBot extends ListenerAdapter {
                         activeClaims.put(claimId, claimData);
 
                         String reviveTypeText = isContractFaction && fullRevive ? " (Contract - Full Revive)"
+                                : isContractFaction ? "(Contract - Partial Revive)"
                                 : fullRevive ? " (Full Revive requested)"
                                 : " (Partial Revive requested)";
 
-                        event.getHook().editOriginal("✅ Your revive request has been submitted!" + reviveTypeText)
+                        String messageText = "✅ Your revive request has been submitted!";
+                        if(!isContractFaction){
+                            messageText += " - Please pay your reviver 1 Xanax." + reviveTypeText;
+                        }else{
+                            messageText += reviveTypeText;
+                        }
+
+                        event.getHook().editOriginal(messageText)
                                 .queue(message -> {
                                     // Delete after the edit completes successfully
                                     message.delete().queueAfter(15, TimeUnit.SECONDS);
