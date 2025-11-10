@@ -126,8 +126,7 @@ public class ClaimBot extends ListenerAdapter {
             EmbedBuilder buttonEmbed = new EmbedBuilder()
                     .setColor(Color.decode("#5865F2"))
                     .setTitle("🏥 Med X Revive Service - Request Revive")
-                    .setDescription("To request a revive, click the button below!")
-                    .setFooter("Click the button below to request a revive!");
+                    .setDescription("To request a revive, click the button below!");
 
             Button reviveMeButton = Button.primary("revive_me", "Revive Me");
             Button reviveSomeoneButton = Button.secondary("revive_someone", "Revive Someone Else");
