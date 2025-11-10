@@ -17,6 +17,7 @@ import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionE
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
@@ -28,13 +29,17 @@ import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.awt.Color;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,7 +61,7 @@ public class ClaimBot extends ListenerAdapter {
     private JDA jda;
 
     public ClaimBot(String targetServerId, String targetChannelContract, String targetChannelFull,
-                    String targetChannelPartial, String targetRoleFullRevive, 
+                    String targetChannelPartial, String targetRoleFullRevive,
                     String targetRolePartRevive, String tornApiKey, Set<String> contractFactionIds) {
         this.targetServerId = targetServerId;
         this.targetChannelContract = targetChannelContract;
@@ -81,7 +86,9 @@ public class ClaimBot extends ListenerAdapter {
         // Register slash commands globally
         event.getJDA().updateCommands().addCommands(
                 Commands.slash("setup-revive-channel", "Setup the revive request channel (Admin only)")
-                        .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.ADMINISTRATOR))
+                        .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.ADMINISTRATOR)),
+                Commands.slash("contract-faction-revivable", "Check revivable members in a contract faction")
+                        .addOption(OptionType.STRING, "faction_id", "The Torn faction ID", true)
         ).queue();
 
         System.out.println("✅ Slash commands registered!");
@@ -92,6 +99,181 @@ public class ClaimBot extends ListenerAdapter {
         if (event.getName().equals("setup-revive-channel")) {
             handleSetupCommand(event);
             return;
+        }
+
+        if (event.getName().equals("contract-faction-revivable")) {
+            handleContractFactionRevivableCommand(event);
+            return;
+        }
+    }
+
+    private void handleContractFactionRevivableCommand(SlashCommandInteractionEvent event) {
+        event.deferReply().queue();
+
+        String factionId = Objects.requireNonNull(event.getOption("faction_id")).getAsString().trim();
+
+        // Validate faction ID format
+        if (!factionId.matches("\\d+")) {
+            event.getHook().editOriginal("❌ Invalid faction ID. Please provide a numeric faction ID.").queue();
+            return;
+        }
+
+        // Fetch faction basic info
+        FactionBasicInfo factionInfo = fetchFactionBasicInfo(factionId);
+
+        if (factionInfo == null) {
+            event.getHook().editOriginal("❌ Could not fetch faction information. Please check the faction ID.").queue();
+            return;
+        }
+
+        // Fetch faction members
+        List<RevivableMember> revivableMembers = fetchRevivableMembers(factionId);
+
+        if (revivableMembers == null) {
+            event.getHook().editOriginal("❌ Could not fetch faction members.").queue();
+            return;
+        }
+
+        // Build and send the embed
+        if (revivableMembers.isEmpty()) {
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setColor(Color.decode("#57F287"))
+                    .setTitle("🏥 Revivable Members")
+                    .setDescription("No members of **" + factionInfo.name + "** are currently in hospital and revivable.")
+                    .setTimestamp(Instant.now())
+                    .setFooter("Faction ID: " + factionId);
+
+            event.getHook().editOriginalEmbeds(embed.build()).queue();
+        } else {
+            StringBuilder description = new StringBuilder();
+            description.append("The following members of **").append(factionInfo.name).append("** are currently in hospital and revivable:\n\n");
+
+            for (RevivableMember member : revivableMembers) {
+                String profileUrl = "https://www.torn.com/profiles.php?XID=" + member.id;
+                description.append("• [").append(member.name).append("](").append(profileUrl).append(")\n");
+            }
+
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setColor(Color.decode("#ED4245"))
+                    .setTitle("🏥 Revivable Members")
+                    .setDescription(description.toString())
+                    .addField("Total Revivable", String.valueOf(revivableMembers.size()), true)
+                    .addField("Total Members", String.valueOf(factionInfo.memberCount), true)
+                    .setTimestamp(Instant.now())
+                    .setFooter("Faction ID: " + factionId);
+
+            event.getHook().editOriginalEmbeds(embed.build()).queue();
+        }
+
+        System.out.println("Contract faction revivable check completed for faction " + factionId + " (" + factionInfo.name + ")");
+    }
+
+    private FactionBasicInfo fetchFactionBasicInfo(String factionId) {
+        String url = "https://api.torn.com/v2/faction/" + factionId + "/basic";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("accept", "application/json")
+                .addHeader("Authorization", "ApiKey " + tornApiKey)
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                System.err.println("Torn API request failed for faction basic info: " + response.code());
+                return null;
+            }
+
+            assert response.body() != null;
+            String responseBody = response.body().string();
+            JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+
+            if (json.has("error")) {
+                System.err.println("Torn API error: " + json.get("error").getAsJsonObject().get("error").getAsString());
+                return null;
+            }
+
+            if (!json.has("basic")) {
+                System.err.println("No basic data in Torn API response");
+                return null;
+            }
+
+            JsonObject basicObj = json.getAsJsonObject("basic");
+
+            FactionBasicInfo info = new FactionBasicInfo();
+            info.id = basicObj.get("id").getAsInt();
+            info.name = basicObj.get("name").getAsString();
+            info.memberCount = basicObj.get("members").getAsInt();
+
+            return info;
+
+        } catch (IOException e) {
+            System.err.println("Error fetching faction basic info: " + e.getMessage());
+            return null;
+        } catch (Exception e) {
+            System.err.println("Error parsing faction basic info: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private List<RevivableMember> fetchRevivableMembers(String factionId) {
+        String url = "https://api.torn.com/v2/faction/" + factionId + "/members?striptags=true";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("accept", "application/json")
+                .addHeader("Authorization", "ApiKey " + tornApiKey)
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                System.err.println("Torn API request failed for faction members: " + response.code());
+                return null;
+            }
+
+            assert response.body() != null;
+            String responseBody = response.body().string();
+            JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+
+            if (json.has("error")) {
+                System.err.println("Torn API error: " + json.get("error").getAsJsonObject().get("error").getAsString());
+                return null;
+            }
+
+            if (!json.has("members")) {
+                System.err.println("No members data in Torn API response");
+                return null;
+            }
+
+            JsonArray membersArray = json.getAsJsonArray("members");
+            List<RevivableMember> revivableMembers = new ArrayList<>();
+
+            for (JsonElement memberElement : membersArray) {
+                JsonObject memberObj = memberElement.getAsJsonObject();
+
+                // Check if member is revivable and in hospital
+                boolean isRevivable = memberObj.get("is_revivable").getAsBoolean();
+                JsonObject statusObj = memberObj.has("status") ? memberObj.getAsJsonObject("status") : null;
+                String statusState = statusObj != null && statusObj.has("state") ?
+                        statusObj.get("state").getAsString() : "Unknown";
+
+                if (isRevivable && "Hospital".equalsIgnoreCase(statusState)) {
+                    RevivableMember member = new RevivableMember();
+                    member.id = memberObj.get("id").getAsInt();
+                    member.name = memberObj.get("name").getAsString();
+                    revivableMembers.add(member);
+                }
+            }
+
+            return revivableMembers;
+
+        } catch (IOException e) {
+            System.err.println("Error fetching faction members: " + e.getMessage());
+            return null;
+        } catch (Exception e) {
+            System.err.println("Error parsing faction members: " + e.getMessage());
+            e.printStackTrace();
+            return null;
         }
     }
 
@@ -175,7 +357,7 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveTypeSelect(StringSelectInteractionEvent event) {
         // Get the selected revive type
         String reviveType = event.getValues().get(0); // "full" or "partial"
-        
+
         // Create modal for entering Torn ID
         TextInput userIdInput = TextInput.create("target_userid", "The Target", TextInputStyle.SHORT)
                 .setPlaceholder("Torn User ID or Profile Link")
@@ -199,7 +381,7 @@ public class ClaimBot extends ListenerAdapter {
     private void handleReviveMeButton(ButtonInteractionEvent event) {
         // Defer to show we're processing
         event.deferReply(true).queue();
-        
+
         // Get the user's Discord ID and fetch their Torn profile
         String userId = event.getUser().getId();
         TornProfile profile = fetchTornProfile(userId);
@@ -248,11 +430,11 @@ public class ClaimBot extends ListenerAdapter {
         event.deferReply(true).queue();
 
         String targetUserIdInput = Objects.requireNonNull(event.getValue("target_userid")).getAsString().trim();
-        
+
         // Extract revive type from modal ID (format: "revive_someone_modal_full" or "revive_someone_modal_partial")
         String modalId = event.getModalId();
         boolean fullRevive = modalId.contains("_full");
-        
+
         // Extract just the first user ID from the input
         String targetUserId = extractFirstUserId(targetUserIdInput);
 
@@ -290,12 +472,12 @@ public class ClaimBot extends ListenerAdapter {
 
     private String extractFirstUserId(String input) {
         // Try different patterns to extract user ID
-        
+
         // Pattern 1: Plain number at start
         if (input.matches("^\\d+.*")) {
             return input.split("[,\\s]")[0];
         }
-        
+
         // Pattern 2: [ID] format
         if (input.contains("[") && input.contains("]")) {
             int start = input.indexOf("[") + 1;
@@ -307,7 +489,7 @@ public class ClaimBot extends ListenerAdapter {
                 }
             }
         }
-        
+
         // Pattern 3: Profile link
         if (input.contains("XID=")) {
             String[] parts = input.split("XID=");
@@ -318,12 +500,12 @@ public class ClaimBot extends ListenerAdapter {
                 }
             }
         }
-        
+
         return null;
     }
 
-    private void processReviveRequestFromButton(ButtonInteractionEvent event, TornProfile profile, 
-                                               String requestorName, boolean fullRevive) {
+    private void processReviveRequestFromButton(ButtonInteractionEvent event, TornProfile profile,
+                                                String requestorName, boolean fullRevive) {
         try {
             Guild targetGuild = jda.getGuildById(targetServerId);
             if (targetGuild == null) {
@@ -339,7 +521,7 @@ public class ClaimBot extends ListenerAdapter {
             System.out.println("DEBUG: User faction ID: " + profile.factionId);
             System.out.println("DEBUG: Contract faction IDs: " + contractFactionIds);
             System.out.println("DEBUG: Checking if " + profile.factionId + " is in contract list");
-            
+
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
             System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
@@ -446,8 +628,8 @@ public class ClaimBot extends ListenerAdapter {
         }
     }
 
-    private void processReviveRequestFromModal(ModalInteractionEvent event, TornProfile profile, 
-                                              String requestorName, boolean fullRevive) {
+    private void processReviveRequestFromModal(ModalInteractionEvent event, TornProfile profile,
+                                               String requestorName, boolean fullRevive) {
         try {
             Guild targetGuild = jda.getGuildById(targetServerId);
             if (targetGuild == null) {
@@ -463,7 +645,7 @@ public class ClaimBot extends ListenerAdapter {
             System.out.println("DEBUG: User faction ID: " + profile.factionId);
             System.out.println("DEBUG: Contract faction IDs: " + contractFactionIds);
             System.out.println("DEBUG: Checking if " + profile.factionId + " is in contract list");
-            
+
             boolean isContractFaction = contractFactionIds.contains(String.valueOf(profile.factionId));
             System.out.println("DEBUG: Is contract faction? " + isContractFaction);
 
@@ -705,6 +887,17 @@ public class ClaimBot extends ListenerAdapter {
         boolean revivable;
         String statusState;
         int factionId;
+    }
+
+    private static class FactionBasicInfo {
+        int id;
+        String name;
+        int memberCount;
+    }
+
+    private static class RevivableMember {
+        int id;
+        String name;
     }
 
     public static void main(String[] args) {
