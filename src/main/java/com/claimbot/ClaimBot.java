@@ -303,9 +303,9 @@ public class ClaimBot extends ListenerAdapter {
                             • Enter the target user ID or Profile link and click submit. \s
                            \s
                             • Be patient.\s
-                            • Once complete, pay the Reviver 2 Xanax For a full revive or 1 Xanax for a partial revive .\s
-                            unless under contract.
-                          \s
+                            • Once complete, pay the Reviver 2 Xanax for a full revive or 1 Xanax for a partial revive .
+                            • unless under contract.\s
+                          
                             *If any issues please contact Dsuttz [1561637]*""")
                     .setTimestamp(Instant.now());
 
